@@ -1,131 +1,396 @@
-useState是内置的钩子吗 是的
+# 1. React Hooks
+- Hook 是 React 16.8 的新增特性。它可以让你在不编写 class 的情况下使用 state 以及其他的 React 特性
+## 1.1 Hooks 优点
+- 可以抽离公共方法和逻辑，提高代码的可复用性
+- 函数式组件更简洁，开发效率更高
+## 1.2 自定义 Hook 
+- 通过自定义 Hook，可以将组件逻辑提取到可重用的函数中
+- 自定义 Hook 是一个函数，其名称以 use 开头，函数内部可以调用其他的 Hook
+![](/public/images/e4fa49ed9ad67984a49e90cbe1d0b111.png)
+## 1.3 初始化项目
+```bash
+create-react-app custom_hooks
+cd custom_hooks
+npm i express cors morgan bootstrap@3 react-router-dom --save
+```
+# 2.useRequest 
+## 2.1 index.js
+src\index.js
+```js
+import React from 'react';
+import ReactDOM from 'react-dom';
+import 'bootstrap/dist/css/bootstrap.css'
+import {BrowserRouter,Route,Link} from 'react-router-dom';
+import Table from './Table';
+import Drag from './Drag';
+import Form from './Form';
+import Circle from './Circle';
+ReactDOM.render(
+  <div className="container">
+    <div className="row">
+      <div className="col-md-12" style={{ padding: 10 }}>
+        <BrowserRouter>
+          <ul className="nav nav-tabs">
+            <li><Link to="/table">Table</Link></li>
+            <li><Link to="/drag">Drag</Link></li>
+            <li><Link to="/form">Form</Link></li>
+            <li><Link to="/circle">Circle</Link></li>
+          </ul>
+          <Route path="/table" component={Table}/>
+          <Route path="/drag" component={Drag}/>
+          <Route path="/form" component={Form}/>
+          <Route path="/circle" component={Circle}/>
+        </BrowserRouter>
+      </div>
+    </div>
+  </div>,
+  document.getElementById('root')
+);
+```
+## 2.2 Table.js
+src\Table.js
+```js
+import React from 'react';
+import useRequest from './hooks/useRequest';
+const URL = 'http://localhost:8000/api/users';
+export default function Table() {
+    const [data, options,setOptions] = useRequest(URL);
+    const { currentPage, totalPage, list } = data;
+    return (
+        <>
+            <table className="table table-striped">
+                <thead>
+                    <tr><td>ID</td><td>姓名</td></tr>
+                </thead>
+                <tbody>
+                    {
+                        list.map(item => (<tr key={item.id}><td>{item.id}</td><td>{item.name}</td></tr>))
+                    }
+                </tbody>
+            </table>
+            <nav>
+                <ul className="pagination">
+                    {currentPage>1&&(
+                        <li>
+                            <button className="btn btn-default" href="#" onClick={() => setOptions({ ...options,currentPage: currentPage - 1 })}>
+                                <span >&laquo;</span>
+                            </button>
+                        </li>
+                    )}
+                    {
+                        new Array(totalPage).fill(0).map((item, index) => (
+                            <li><button className={index+1===currentPage?'btn btn-success':'btn btn-default'} key={item.id} onClick={() => setOptions({ ...options,currentPage: index + 1 })}>{index + 1}</button></li>
+                        ))
+                    }
+                    {
+                        currentPage<totalPage&&(
+                            <li>
+                                <button className="btn btn-default"  onClick={() => setOptions({...options, currentPage: currentPage + 1 })}>
+                                    <span>&raquo;</span>
+                                </button>
+                            </li>
+                        )
+                    }
+                </ul>
+            </nav>
+        </>
+    )
+}
+```
+## 2.3 useRequest.js
+src\hooks\useRequest.js
+```js
+import { useState, useEffect } from 'react';
+function useRequest(url) {
+    let [options, setOptions] = useState({
+        currentPage: 1,
+        pageSize: 5
+    });
+    let [data, setData] = useState({
+        totalPage: 0,
+        list: []
+    });
+    function getData() {
+        let { currentPage, pageSize } = options;
+        fetch(`${url}?currentPage=${currentPage}&pageSize=${pageSize}`)
+            .then(response => response.json())
+            .then(result => {
+                setData({...result});
+            });
+    }
+    useEffect(getData, [options, url]);
+    return [data,options, setOptions];
+}
 
-现在项目是不是都用hooks，不用类这种方式了？ 是的
-皕圩送给老师一朵
-直接学hooks可以吗 可以
+export default useRequest;
+```
+## 2.4 api.js
+api.js
+```js
+let express = require('express');
+let cors = require('cors');
+let logger = require('morgan');
+let app = express();
+app.use(logger('dev'));
+app.use(cors());
+app.get('/api/users', function (req, res) {
+    let currentPage = parseInt(req.query.currentPage);
+    let pageSize = parseInt(req.query.pageSize);
+    let total=25;
+    let list = [];
+    let offset = (currentPage-1)*pageSize;
+    for (let i = offset; i < offset + pageSize; i++) {
+        list.push({ id: i + 1, name: 'name' + (i + 1) });
+    }
+    res.json({
+        currentPage,
+        pageSize,
+        totalPage:Math.ceil(total/pageSize),
+        list
+    });
+});
+app.listen(8000,()=>{
+    console.log('sever started at port 8000');
+});
+```
+# 3.useDrag
+![](/public/images/c81b23738e0b951ad11d4a395795b7ff.png)
+## 3.1 基础
+### 3.1.1 触摸事件
+| 事件名称 | 描述 | 是否包含 touches数组 |
+| --- | --- | --- |
+| touchstart | 触摸开始发 | 是 |
+| touchmove | 滑动时接触点改变 | 是 |
+| touchend | 手指离开屏幕时触摸结束 | 是 |
 
-fetch方法是自带的？ 是的
-怎么使用快捷方式自动添加的依赖项
-fetch是浏览器自带的
-老师逻辑清晰，吐词清楚，讲的很好
+### 3.1.2 触摸列表
+| 参数 | 描述 |
+| --- | --- |
+| touches | 当前位于屏幕上的所有手指的列表 |
+| targetTouches | 位于当前DOM元素上手指的列表 |
 
-自定义hooks对比 单纯方法的封装优势就是用了react的hooks吗
-ｕｓｅＥｆｆｅｃｔ依赖项是浅比较吗 是的
+### 3.1.3 Touch对象
+| 参数 | 描述 |
+| --- | --- |
+| clientX | 触摸目标在视口中的x坐标 |
+| clientY | 触摸目标在视口中的y坐标 |
+| pageX | 触摸目标在页面中的x坐标 |
+| pageY | 触摸目标在页面中的y坐标 |
 
-是浅比较
-肯定浅比较 深比较有性能瓶颈
+## 3.2 实现
+### 3.2.1 index.js
+src\index.js
+```js
+import React from 'react';
+import ReactDOM from 'react-dom';
+import 'bootstrap/dist/css/bootstrap.css'
+import Drag from './Drag';
+ReactDOM.render(
+  <div className="container">
+    <div className="row">
+      <div className="col-md-12">
+        {<Drag />}
+      </div>
+    </div>
+  </div>,
+  document.getElementById('root')
+);
+```
+### 3.2.2 src\Drag.js
+src\Drag.js
+```js
+import React from 'react';
+import useDrag from './hooks/useDrag';
+let style = {width:'100px',height:'100px',borderRadius:'50%'};
+export default function Drag() {
+    const [style1, dragRef1] = useDrag()
+    const [style2, dragRef2] = useDrag()
+    return (
+        <>
+            <div
+                ref={dragRef1}
+                style={{...style,backgroundColor:'red',transform: `translate(${style1.x}px, ${style1.y}px)` }}
+            ></div>
+             <div
+                ref={dragRef2}
+                style={{...style,backgroundColor:'green',transform: `translate(${style2.x}px, ${style2.y}px)` }}
+            ></div>
+        </>
+    )
+}
+```
+### 3.2.3 useDrag.js
+src\hooks\useDrag.js
+```js
+import { useLayoutEffect, useState, useRef } from 'react';
+function useDrag() {
+    const positionRef = useRef({
+        currentX: 0, currentY: 0,
+        lastX: 0, lastY: 0
+    })
+    const moveElement = useRef(null);
+    const [, forceUpdate] = useState({});
+    useLayoutEffect(() => {
+        let startX, startY;
+        const start = function (event) {
+            const { clientX, clientY } =  event.targetTouches[0];
+            startX = clientX;
+            startY = clientY;
+            moveElement.current.addEventListener('touchmove', move);
+            moveElement.current.addEventListener('touchend', end);
 
+        }
+        const move = function (event) {
+            const { clientX, clientY } = event.targetTouches[0];
+            positionRef.current.currentX = positionRef.current.lastX + (clientX - startX);
+            positionRef.current.currentY = positionRef.current.lastY + (clientY - startY);
+            forceUpdate({});
+        }
+        const end = (event) => {
+            positionRef.current.lastX = positionRef.current.currentX;
+            positionRef.current.lastY = positionRef.current.currentY;
+            moveElement.current.removeEventListener('touchmove', move);
+                moveElement.current.removeEventListener('touchend', end);
+        }
+        moveElement.current.addEventListener('touchstart', start);
 
+    }, []);
+    return [{ x: positionRef.current.currentX, y: positionRef.current.currentY }, moveElement]
+}
 
-useRef 干啥的？
-转发真实dom节点
-为什么用useLayoutEffect
-老师，为什么positionRef不用useState创建？
+export default useDrag;
+```
+# 4.useForm
+## 4.1 src\index.js
+src\index.js
+```js
+import React from 'react';
+import ReactDOM from 'react-dom';
+import 'bootstrap/dist/css/bootstrap.css'
+import Form from './Form';
+ReactDOM.render(
+  <div className="container">
+    <div className="row">
+      <div className="col-md-12">
+        {<Form />}
+      </div>
+    </div>
+  </div>,
+  document.getElementById('root')
+);
+```
+## 4.2 src\Form.js
+src\Form.js
+```js
+import React from 'react';
+import useForm from './hooks/useForm';
+export default function Form() {
+    const [formData, setFormValue, resetFormValues] = useForm({username:'',email:''});
+    return (
+        <div className="panel">
+            <div className="panel-body">
+                <form>
+                    <div className="form-group">
+                        <label >用户名</label>
+                        <input
+                            className="form-control"
+                            placeholder="用户名"
+                            value={formData.username}
+                            onChange={(event) => setFormValue('username', event.target.value)} />
+                    </div>
+                    <div className="form-group">
+                        <label >邮箱</label>
+                        <input
+                            className="form-control"
+                            placeholder="邮箱"
+                            value={formData.email}
+                            onChange={(event) => setFormValue('email', event.target.value)}
+                        />
+                    </div>
+                    <button type="button" className="btn btn-default" onClick={() => console.log(formData)}>提交</button>
+                    <button  type="button" className="btn btn-default" onClick={resetFormValues}>重置</button>
+                </form>
+            </div>
+        </div>
+    )
+}
+```
+## 4.3 useForm.js
+src\hooks\useForm.js
+```js
+import { useState } from 'react';
+function useForm(values) {
+    const [formData, setFormData] = useState(values);
+    const setFormValue = (key, value) => {
+        setFormData({...formData,[key]:value});
+    }
+    const resetFormValues = () => {
+        setFormData(values);
+    }
+    return [formData, setFormValue, resetFormValues];
+}
 
-
-注意
-如果你是從 class component migrate 程式碼，請注意useLayoutEffect與componentDidMount和componentDidUpdate的呼叫時機是一樣。不過，我們建議先使用useEffect，只當它有問題時才嘗試使用useLayoutEffect。
-useLayoutEffect (以下官方說明)
-useEffect
-useLayoutEffect 不一样
-你可以简单的认为 useEffect是在下一个事件环执行的
-useLayoutEffect 是微任务 会在渲染前执行
- useEffect 是一个宏任务 会在渲染后
-
-與宣告useEffect本身相同，但它會在所有 DOM 改變後，同步調用。使用它來讀取 DOM layout 並同步重新 render。在瀏覽器執行繪製之前，useLayoutEffect內部的更新將被同步刷新。
-positionRef 是啥啊
-就是一个普通 的对象 
- 格式就是{current:null}
-老师，如何获取demo代码？
-positionRef 哪裡宣告的??
-const positonRef = useRef(...);
-touchstart不用加逻辑吗？不在开始时记录开始位置？
-假如我有上百个或者更多的元素，需要拖拽，这样会不会有性能的问题
-
-
-这个自定义hook怎么写的呀  老师串一下
-老师，start在哪里执行的？
-这个positionRef放在函数外面是不是也一样
-positionRef为什么用useState是不是更合适？
-尽量不要刷新组件
-拖拽这例子不用 useLayoutEffect, 用 useEffect 行吗?
-useLayoutEffect会在所有 DOM 改变后，同步调用 ，不是之前吧??
-看下代码，老师
-useRef是钩子函数，要在react函数里面执行
-代码会放出来么老师
-usestate会触发渲染
-休息5分
-来广告哈哈
-会拖出可视区域外吧?
-老师，如何获取您写的代码？
-有录屏吗
-强制刷新 那个没懂 老师？
-addEventListener监听过多，会不会造成性能问题，
-6啊
-老师，positionRef如果用useState定义的话是不是就不用forceUpdate呢？
-我项目里面用postmessage通信，现在页面很多，postmessage监听过多，偶尔会蹦掉，好像是有性能问题
-iframe ？  为啥用postmessage？
-shij
-时间管理大师
-useRef 和 cr
-
-
-useRef是一个Hooks,只能用在函数组件中，可以多次渲染的保持不变
-React.createRef是一个普通 的方法，可以在类组件中使用. 每次调用都会返回一个新的对象
-useRef 和 createRef 的区别能说一下吗
-这个positionRef放在函数外面是不是也一样 是的
-lastX 是原生的就有啊？原生没有，自己写的 
-forceUpdate 这个 操作啥原理
-这个名字也是随便写的 ,setXXX方法就会让组件刷新
-该发言可能违规，仅老师可见
-positionRef其实就是一个对象， 没必要用useRef吧
-需要的。为什么。因为我们要让它在多次渲染的保持始终同一个对象
-positionRef={}
-useEffectLayout和微任务是相同优先级吗
-任务不是先宏后微吗？为啥useEffectLayout比useEffect先？
-每个宏任务结束 后，会清空所有的微任务，再执行下一个宏任务
-在宏任务里面先执行微任务
-ok
-建议看一下事件循环
-很丝滑 这个拖拽
-这是不是跟浏览器的渲染 有关？
-老师，绑定onClick事件不推荐写成onclick={()=>{}}这种，这样的话每次render重新创建函数
-useCallback
-hooks里return的数组的顺序有关系吗
-没有关系。你自定义hook如何返回，你就得如何接收
-张晓:hooks里return的数组的顺序有关系吗 没关系
-
-
-
-usercallback 里边那个参数怎么传过去的？
-useCallback 可以使用闭包形式传值吗
-arguments吧
-每个宏任务执行完后，会清空所有的微任务，
-执行下一个宏任务 那微任务和宏任务的优先级具体规则是怎样的呢 可以简单的理解为微任务的优先级更高吗
-可以这样理解
-事件环不能套事件环
-老师类似于 轮播的 切换我不会诶
-哪里不太懂
-原理不太懂
-
-轮播图
-
-
-讲下自定义Hook的流程
-hook可以不return内容吗 可以的
-就 event
-useCallback的源码是这样吗？ useCallback=(fn)=>{return fn()}
-两个usecallback可以实现复用吗？
-是的
-
-
-useRequest 加一个缓存功能
-这个缓存是要放到loaclStorage么？
-hooks 是必须16.8 用么
-16.8以下没这玩意
-所有hook的依赖项都是钱比较吗 是的
-仅仅通过lastDependencies确认两次callback是否一样，会不会某些场景有问题，比如两个callback不同，但是依赖项一样，不就没法调用第二次callback？
-Object.is和==的区别是啥
-Object.is和 == 是一样的吗?
-
-
+export default useForm;
+```
+# 5.useAnimation
+## 5.1 src\index.js
+src\index.js
+```js
+import React from 'react';
+import ReactDOM from 'react-dom';
+import 'bootstrap/dist/css/bootstrap.css'
+import Circle from './Circle';
+ReactDOM.render(
+  <div className="container">
+    <div className="row">
+      <div className="col-md-12" style={{ padding: 10 }}>
+        <Circle/>
+      </div>
+    </div>
+  </div>,
+  document.getElementById('root')
+);
+```
+## 5.2 src\Circle.js
+src\Circle.js
+```js
+import useAnimation from './hooks/useAnimation';
+import './Circle.css';
+function Circle() {
+  const [className, start] = useAnimation('circle','active');
+    return (
+      <div className={className} onClick={start}></div>
+    );
+}
+export default Circle;
+```
+## 5.3 Circle.css
+src\Circle.css
+```css
+.circle {
+    width : 200px;
+    height : 200px;
+    background-color : gray;
+    transition: all 2s;
+}
+.circle.active {
+    background-color : green;
+}
+```
+## 5.4 useAnimation.js
+src\hooks\useAnimation.js
+```js
+import {useState} from 'react';
+function useAnimation(initialClassName,activeClassName) {
+    const [className, setClassName] = useState(initialClassName);
+    function start() {
+        if (className === initialClassName) {
+            setClassName(`${initialClassName} ${activeClassName}`);
+        }else{
+            setClassName(`${initialClassName}`);
+        }
+    }
+    return [className, start];
+}
+export default useAnimation;
+```
